@@ -1,4 +1,0 @@
-config ARGOS
-	default N
-	---help---
-	  Enable support for dynamic network qos driver - argos
