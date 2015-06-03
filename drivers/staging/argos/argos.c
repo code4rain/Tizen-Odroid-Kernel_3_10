@@ -48,9 +48,11 @@ struct argos_block {
 struct argos_platform_data {
 	struct argos_block *blocks;
 	int nblocks;
+	struct notifier_block pm_qos_nfb;
 };
 
 static struct argos_platform_data *argos_pdata;
+
 
 #ifdef CONFIG_OF
 static int argos_parse_dt(struct device *dev)
@@ -105,6 +107,72 @@ static int argos_parse_dt(struct device *dev)
 }
 #endif
 
+static void argos_freq_unlock(int type)
+{
+	struct argos_pm_qos *qos = argos_pdata->blocks[type].qos;
+
+	REMOVE_PM_QOS(&qos->cpu_qos_req);
+	REMOVE_PM_QOS(&qos->bus_qos_req);
+}
+
+static void argos_freq_lock(int type, int level)
+{
+	struct boost_entry *e = &argos_pdata->blocks[type].table[level];
+	struct arogs_pm_qos *qos = argos_pdata->blocks[type].qos;
+	unsigned int cpu_freq, bus_freq;
+
+	cpu_freq = e->cpu_freq;
+	bus_freq = e->bus_freq;
+
+	if (cpu_freq)
+		UPDATE_PM_QOS(&qos->cpu_qos_req, PM_QOS_CPU_FREQUENCY, cpu_freq);
+	else
+		REMOVE_PM_QOS(&qos->cpu_qos_req);
+
+
+	if (bus_freq)
+		UPDATE_PM_QOS(&qos->bus_qos_req, PM_QOS_BUS_FREQUENCY, bus_freq);
+	else
+		REMOVE_PM_QOS(&qos->bus_qos_req);
+}
+
+#define TYPE_SHIFT 4
+#define TYPE_MASK_BIT ((1 << TYPE_SHIFT) - 1)
+
+static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedtype, void *arg)
+{
+	int type, level, prev_level;
+	unsigned long speed;
+	struct argos_block *block;
+
+	type = (speedtype & TYPE_MASK_BIT) - 1;
+	speed = speedtype >> TYPE_SHIFT;
+	block = &argos_pdata->blocks[type];
+	prev_level = block->prev_level;
+
+	pr_info("%s name:%s, speed:%ldMbps\n", __func__, block->name, speed);
+
+	if (type > argos_pdata->nblocks)
+		return NOTIFY_BAD;
+
+	/* find proper level */
+	for (level = -1, i = 0; i < block->num_entry; i++) {
+		if (speed < block->table[i].throughput)
+			break;
+		level++;
+	}
+
+	if (level != prev_level) {
+		if (level == -1)
+			argos_freq_unlock(type);
+		else
+			argos_freq_lock(type, level);
+		block->prev_level = level;
+	}
+
+	return NOTIFY_OK;
+}
+
 static int argos_probe(struct platform_device *pdev)
 {
 	struct argos_platform_data *pdata;
@@ -131,6 +199,9 @@ static int argos_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "No platform data\n");
 		return -EINVAL;
 	}
+	pdata->pm_qos_nfb.notifier_call = argos_pm_qos_notify;
+	pm_qos_add_notifier(PM_QOS_NETWORK_THROUGHPUT, &pdata->pm_qos_nfb);
+
 	argos_pdata = pdata;
 	platform_set_drvdata(pdev, pdata);
 
