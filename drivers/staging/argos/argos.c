@@ -53,6 +53,19 @@ struct argos_platform_data {
 
 static struct argos_platform_data *argos_pdata;
 
+#define UPDATE_PM_QOS(req, class_id, arg) ({ \
+		if (arg) { \
+			if (pm_qos_request_active(req)) \
+				pm_qos_update_request(req, arg); \
+			else \
+				pm_qos_add_request(req, class_id, arg); \
+		} \
+	})
+
+#define REMOVE_PM_QOS(req) ({ \
+		if (pm_qos_request_active(req)) \
+			pm_qos_remove_request(req); \
+	})
 
 #ifdef CONFIG_OF
 static int argos_parse_dt(struct device *dev)
