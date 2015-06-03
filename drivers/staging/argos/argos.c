@@ -24,8 +24,46 @@
 
 #define ARGOS_NAME "argos"
 
+struct argos_platform_data {
+};
+static struct argos_platform_data *argos_pdata;
+
+#ifdef CONFIG_OF
+static int argos_parse_dt(struct device *dev)
+{
+	return 0;
+}
+#endif
+
 static int argos_probe(struct platform_device *pdev)
 {
+	struct argos_platform_data *pdata;
+
+	if (pdev->dev.of_node) {
+		int ret = 0;
+		pdata = devm_kzalloc(&pdev->dev, sizeof(struct argos_platform_data),
+				GFP_KERNEL);
+		if (!pdata) {
+			dev_err(&pdev->dev, "Failed to allocate platform data\n");
+			return -ENOMEM;
+		}
+		pdev->dev.platform_data = pdata;
+
+		ret = argos_parse_dt(&pdev->dev);
+		if (!ret) {
+			dev_err(&pdev->dev, "Failed to parse device tree\n");
+			return ret;
+		}
+	} else
+		pdata = pdev->dev.platform_data;
+
+	if (!pdata) {
+		dev_err(&pdev->dev, "No platform data\n");
+		return -EINVAL;
+	}
+	argos_pdata = pdata;
+	platform_set_drvdata(pdev, pdata);
+
 	return 0;
 }
 
