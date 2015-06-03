@@ -6,8 +6,9 @@ menu "Network Throughput base QoS using argos daemon"
 
 config ARGOS
 	bool "Network extended QoS Support"
-	depens on PM
+	depends on PM
 	---help---
 	This option enables network extended QoS support with usermode daemon - argosd
 	. This is helpful to guaruntee specific device drivers throughput like WIFI,
 	P2P, MODEM, and so on.
+endmenu
