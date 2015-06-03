@@ -22,6 +22,8 @@
 #include <linux/device.h>
 #include <linux/of.h>
 #include <linux/pm_qos.h>
+#include <linux/gfp.h>
+#include <linux/platform_device.h>
 
 #define ARGOS_NAME "argos"
 
@@ -76,11 +78,11 @@ static int argos_parse_dt(struct device *dev)
 	int blk_count = 0;
 
 	np = dev->of_node;
-	pdata->nblock = of_get_child_count(np);
-	if (!pdata->nblock)
+	pdata->nblocks = of_get_child_count(np);
+	if (!pdata->nblocks)
 		return -ENODEV;
 
-	pdata->blocks = devm_kzalloc(dev, sizeof(struct argos_block) * pdata->nblock,
+	pdata->blocks = devm_kzalloc(dev, sizeof(struct argos_block) * pdata->nblocks,
 			GFP_KERNEL);
 	if (!pdata->blocks)
 		return -ENOMEM;
@@ -90,7 +92,7 @@ static int argos_parse_dt(struct device *dev)
 		int i;
 		block = &pdata->blocks[blk_count];
 		block->name = of_get_property(cnp, "net_boost,label", NULL);
-		if (of_get_property_read_u32(cnp, "net_boost,table_size", &num_entry))
+		if (of_property_read_u32(cnp, "net_boost,table_size", &num_entry))
 			return -EINVAL;
 		block->num_entry = num_entry;
 
@@ -130,8 +132,8 @@ static void argos_freq_unlock(int type)
 
 static void argos_freq_lock(int type, int level)
 {
+	struct argos_pm_qos *qos = argos_pdata->blocks[type].qos;
 	struct boost_entry *e = &argos_pdata->blocks[type].table[level];
-	struct arogs_pm_qos *qos = argos_pdata->blocks[type].qos;
 	unsigned int cpu_freq, bus_freq;
 
 	cpu_freq = e->cpu_freq;
@@ -155,6 +157,7 @@ static void argos_freq_lock(int type, int level)
 static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedtype, void *arg)
 {
 	int type, level, prev_level;
+	int i;
 	unsigned long speed;
 	struct argos_block *block;
 
