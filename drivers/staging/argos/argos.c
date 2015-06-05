@@ -42,8 +42,11 @@ struct argos_block {
 	const char *name;
 	struct platform_device *pdev;
 	struct boost_entry *table;
+	struct boost_entry *power_table;
 	int num_entry;
+	int power_num_entry;
 	int prev_level;
+	int power_prev_level;
 	struct argos_pm_qos *qos;
 };
 
@@ -54,6 +57,7 @@ struct argos_platform_data {
 };
 
 static struct argos_platform_data *argos_pdata;
+static uint32_t power_mode;
 
 #define UPDATE_PM_QOS(req, class_id, arg) ({ \
 		if (arg) { \
@@ -89,9 +93,12 @@ static int argos_parse_dt(struct device *dev)
 
 	for_each_child_of_node(np, cnp) {
 		int num_entry;
+		int power_num_entry;
 		int i;
 		block = &pdata->blocks[blk_count];
 		block->name = of_get_property(cnp, "net_boost,label", NULL);
+
+		/* performance parameters */
 		if (of_property_read_u32(cnp, "net_boost,table_size", &num_entry))
 			return -EINVAL;
 		block->num_entry = num_entry;
@@ -100,6 +107,7 @@ static int argos_parse_dt(struct device *dev)
 				GFP_KERNEL);
 		if (!block->table)
 			return -ENOMEM;
+
 		for (i = 0; i < num_entry; i++) {
 			if (of_property_read_u32_index(cnp, "net_boost,table", i * 3,
 						&block->table[i].throughput))
@@ -112,6 +120,29 @@ static int argos_parse_dt(struct device *dev)
 				return -EINVAL;
 		}
 		block->prev_level = -1;
+
+		/* power parameters */
+		if (of_property_read_u32(cnp, "net_boost,power_table_size", &power_num_entry))
+			return -EINVAL;
+		block->power_num_entry = power_num_entry;
+
+		block->power_table = devm_kzalloc(dev, sizeof(struct boost_entry) * power_num_entry,
+				GFP_KERNEL);
+		if (!block->power_table)
+			return -ENOMEM;
+		for (i = 0; i < power_num_entry; i++) {
+			if (of_property_read_u32_index(cnp, "net_boost,power_table", i * 3,
+						&block->power_table[i].throughput))
+				return -EINVAL;
+			if (of_property_read_u32_index(cnp, "net_boost,power_table", i * 3 + 1,
+						&block->power_table[i].cpu_freq))
+				return -EINVAL;
+			if (of_property_read_u32_index(cnp, "net_boost,power_table", i * 3 + 2,
+						&block->power_table[i].bus_freq))
+				return -EINVAL;
+		}
+		block->power_prev_level = -1;
+
 		block->qos = devm_kzalloc(dev, sizeof(struct argos_pm_qos), GFP_KERNEL);
 		if (!block->qos)
 			return -ENOMEM;
@@ -125,6 +156,7 @@ static int argos_parse_dt(struct device *dev)
 static void argos_freq_unlock(int type)
 {
 	struct argos_pm_qos *qos = argos_pdata->blocks[type].qos;
+	pr_info("%s : CPU unset, BUS unset\n", __func__);
 
 	REMOVE_PM_QOS(&qos->cpu_qos_req);
 	REMOVE_PM_QOS(&qos->bus_qos_req);
@@ -133,12 +165,17 @@ static void argos_freq_unlock(int type)
 static void argos_freq_lock(int type, int level)
 {
 	struct argos_pm_qos *qos = argos_pdata->blocks[type].qos;
-	struct boost_entry *e = &argos_pdata->blocks[type].table[level];
+	struct boost_entry *e;
 	unsigned int cpu_freq, bus_freq;
 
+	if (power_mode)
+		e = &argos_pdata->blocks[type].power_table[level];
+	else
+		e = &argos_pdata->blocks[type].table[level];
 	cpu_freq = e->cpu_freq;
 	bus_freq = e->bus_freq;
 
+	pr_info("%s : CPU set: %u BUS set: %u\n", __func__, cpu_freq, bus_freq);
 	if (cpu_freq)
 		UPDATE_PM_QOS(&qos->cpu_qos_req, PM_QOS_CPU_FREQUENCY, cpu_freq);
 	else
@@ -154,22 +191,11 @@ static void argos_freq_lock(int type, int level)
 #define TYPE_SHIFT 4
 #define TYPE_MASK_BIT ((1 << TYPE_SHIFT) - 1)
 
-static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedtype, void *arg)
+static void __argos_pm_qos_notify(struct argos_block *block, int type, int speed)
 {
-	int type, level, prev_level;
 	int i;
-	unsigned long speed;
-	struct argos_block *block;
-
-	type = (speedtype & TYPE_MASK_BIT) - 1;
-	speed = speedtype >> TYPE_SHIFT;
-	block = &argos_pdata->blocks[type];
-	prev_level = block->prev_level;
-
-	pr_info("%s name:%s, speed:%ldMbps\n", __func__, block->name, speed);
-
-	if (type > argos_pdata->nblocks)
-		return NOTIFY_BAD;
+	int level;
+	int prev_level = block->prev_level;
 
 	/* find proper level */
 	for (level = -1, i = 0; i < block->num_entry; i++) {
@@ -185,6 +211,47 @@ static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedty
 			argos_freq_lock(type, level);
 		block->prev_level = level;
 	}
+}
+static void __argos_pm_qos_notify_power(struct argos_block *block,
+					int type, int speed)
+{
+	int i;
+	int level;
+	int prev_level = block->power_prev_level;
+
+	/* find proper level */
+	for (level = -1, i = 0; i < block->power_num_entry; i++) {
+		if (speed < block->power_table[i].throughput)
+			break;
+		level++;
+	}
+
+	if (level != prev_level) {
+		if (level == -1)
+			argos_freq_unlock(type);
+		else
+			argos_freq_lock(type, level);
+		block->power_prev_level = level;
+	}
+}
+static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedtype, void *arg)
+{
+	int type, i;
+	unsigned long speed;
+	struct argos_block *block;
+
+	type = (speedtype & TYPE_MASK_BIT) - 1;
+	speed = speedtype >> TYPE_SHIFT;
+	block = &argos_pdata->blocks[type];
+
+	pr_info("%s name:%s, speed:%ldMbps\n", __func__, block->name, speed);
+
+	if (type > argos_pdata->nblocks)
+		return NOTIFY_BAD;
+	if (power_mode)
+		__argos_pm_qos_notify_power(block, type, speed);
+	else
+		__argos_pm_qos_notify(block, type, speed);
 
 	return NOTIFY_OK;
 }
@@ -257,6 +324,8 @@ static void __exit argos_exit(void)
 {
 	return platform_driver_unregister(&argos_driver);
 }
+
+module_param_named(power_mode, power_mode, uint, S_IRUGO | S_IWUSR);
 
 subsys_initcall(argos_init);
 module_exit(argos_exit);
