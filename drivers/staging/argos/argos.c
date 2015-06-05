@@ -191,12 +191,13 @@ static void argos_freq_lock(int type, int level)
 #define TYPE_SHIFT 4
 #define TYPE_MASK_BIT ((1 << TYPE_SHIFT) - 1)
 
-static void __argos_pm_qos_notify(struct argos_block *block, int type, int speed)
+static void __argos_pm_qos_notify(struct argos_block *block, int type, long speed)
 {
 	int i;
 	int level;
 	int prev_level = block->prev_level;
 
+	pr_info("%s: type: %d : speed: %ld\n", __func__, type, speed);
 	/* find proper level */
 	for (level = -1, i = 0; i < block->num_entry; i++) {
 		if (speed < block->table[i].throughput)
@@ -213,11 +214,12 @@ static void __argos_pm_qos_notify(struct argos_block *block, int type, int speed
 	}
 }
 static void __argos_pm_qos_notify_power(struct argos_block *block,
-					int type, int speed)
+					int type, long speed)
 {
 	int i;
 	int level;
 	int prev_level = block->power_prev_level;
+	pr_info("%s: type: %d : speed: %ld\n", __func__, type, speed);
 
 	/* find proper level */
 	for (level = -1, i = 0; i < block->power_num_entry; i++) {
@@ -240,6 +242,7 @@ static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedty
 	unsigned long speed;
 	struct argos_block *block;
 
+	pr_info("%s: arg: %ld\n", __func__, speedtype);
 	type = (speedtype & TYPE_MASK_BIT) - 1;
 	speed = speedtype >> TYPE_SHIFT;
 	block = &argos_pdata->blocks[type];
@@ -260,6 +263,7 @@ static int argos_probe(struct platform_device *pdev)
 {
 	struct argos_platform_data *pdata;
 
+	pr_info("%s: probe+\n", __func__);
 	if (pdev->dev.of_node) {
 		int ret = 0;
 		pdata = devm_kzalloc(&pdev->dev, sizeof(struct argos_platform_data),
@@ -288,6 +292,7 @@ static int argos_probe(struct platform_device *pdev)
 	argos_pdata = pdata;
 	platform_set_drvdata(pdev, pdata);
 
+	pr_info("%s: probe-\n", __func__);
 	return 0;
 }
 
@@ -317,6 +322,7 @@ static struct platform_driver argos_driver = {
 
 static int __init argos_init(void)
 {
+	pr_info("%s: init\n", __func__);
 	return platform_driver_register(&argos_driver);
 }
 
