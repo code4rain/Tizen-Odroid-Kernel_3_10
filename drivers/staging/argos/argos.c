@@ -236,7 +236,7 @@ static void __argos_pm_qos_notify_power(struct argos_block *block,
 }
 static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedtype, void *arg)
 {
-	int type, i;
+	int type;
 	unsigned long speed;
 	struct argos_block *block;
 
