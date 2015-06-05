@@ -271,7 +271,7 @@ static int argos_probe(struct platform_device *pdev)
 		pdev->dev.platform_data = pdata;
 
 		ret = argos_parse_dt(&pdev->dev);
-		if (!ret) {
+		if (ret) {
 			dev_err(&pdev->dev, "Failed to parse device tree\n");
 			return ret;
 		}
