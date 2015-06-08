@@ -58,6 +58,7 @@ struct argos_platform_data {
 
 static struct argos_platform_data *argos_pdata;
 static uint32_t power_mode;
+static uint32_t prev_power_mode;
 
 #define UPDATE_PM_QOS(req, class_id, arg) ({ \
 		if (arg) { \
@@ -156,7 +157,7 @@ static int argos_parse_dt(struct device *dev)
 static void argos_freq_unlock(int type)
 {
 	struct argos_pm_qos *qos = argos_pdata->blocks[type].qos;
-	pr_info("%s : CPU unset, BUS unset\n", __func__);
+	pr_info("%s: CPU: 0 BUS: 0\n", __func__);
 
 	REMOVE_PM_QOS(&qos->cpu_qos_req);
 	REMOVE_PM_QOS(&qos->bus_qos_req);
@@ -175,17 +176,28 @@ static void argos_freq_lock(int type, int level)
 	cpu_freq = e->cpu_freq;
 	bus_freq = e->bus_freq;
 
-	pr_info("%s : CPU set: %u BUS set: %u\n", __func__, cpu_freq, bus_freq);
-	if (cpu_freq)
-		UPDATE_PM_QOS(&qos->cpu_qos_req, PM_QOS_CPU_FREQUENCY, cpu_freq);
-	else
-		REMOVE_PM_QOS(&qos->cpu_qos_req);
+	pr_info("%s: CPU: %u BUS: %u\n", __func__, cpu_freq, bus_freq);
+	if (power_mode) {
+		if (cpu_freq)
+			UPDATE_PM_QOS(&qos->cpu_qos_req, PM_QOS_CPU_FREQUENCY, cpu_freq);
+		else
+			REMOVE_PM_QOS(&qos->cpu_qos_req);
 
+		if (bus_freq)
+			UPDATE_PM_QOS(&qos->bus_qos_req, PM_QOS_BUS_FREQUENCY, bus_freq);
+		else
+			REMOVE_PM_QOS(&qos->bus_qos_req);
+	} else {
+		if (cpu_freq)
+			UPDATE_PM_QOS(&qos->cpu_qos_req, PM_QOS_CPU_MAX_FREQUENCY, cpu_freq);
+		else
+			REMOVE_PM_QOS(&qos->cpu_qos_req);
 
-	if (bus_freq)
-		UPDATE_PM_QOS(&qos->bus_qos_req, PM_QOS_BUS_FREQUENCY, bus_freq);
-	else
-		REMOVE_PM_QOS(&qos->bus_qos_req);
+		if (bus_freq)
+			UPDATE_PM_QOS(&qos->bus_qos_req, PM_QOS_BUS_MAX_FREQUENCY, bus_freq);
+		else
+			REMOVE_PM_QOS(&qos->bus_qos_req);
+	}
 }
 
 #define TYPE_SHIFT 4
@@ -248,6 +260,11 @@ static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedty
 	block = &argos_pdata->blocks[type];
 
 	pr_info("%s name:%s, speed:%ldMbps\n", __func__, block->name, speed);
+
+	if (power_mode != prev_power_mode) {
+		argos_freq_unlock(type);
+		prev_power_mode = power_mode;
+	}
 
 	if (type > argos_pdata->nblocks)
 		return NOTIFY_BAD;
