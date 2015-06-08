@@ -129,8 +129,8 @@ static struct pm_qos_object cpu_frequency_pm_qos = {
 static BLOCKING_NOTIFIER_HEAD(bus_frequency_max_notifier);
 static struct pm_qos_constraints bus_frequency_max_constraints = {
 	.list = PLIST_HEAD_INIT(bus_frequency_max_constraints.list),
-	.target_value = PM_QOS_BUS_FREQUENCY_MAX__DEFAULT_VALUE,
-	.default_value = PM_QOS_BUS_FREQUENCY_MAX__DEFAULT_VALUE,
+	.target_value = PM_QOS_BUS_FREQUENCY_MAX_DEFAULT_VALUE,
+	.default_value = PM_QOS_BUS_FREQUENCY_MAX_DEFAULT_VALUE,
 	.type = PM_QOS_MIN,
 	.notifiers = &bus_frequency_max_notifier,
 };
