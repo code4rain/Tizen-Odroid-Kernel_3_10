@@ -217,9 +217,9 @@ static void __argos_pm_qos_notify(struct argos_block *block, int type, long spee
 		level++;
 	}
 
-	pr_info("%s: name: %s : speed: %ld (%d->%d)\n", __func__, name, speed,
-			prev_level, level);
 	if (level != prev_level) {
+		pr_info("%s: name: %s : speed: %ld (%d->%d)\n", __func__, name, speed,
+			prev_level, level);
 		if (level == -1)
 			argos_freq_unlock(type);
 		else
@@ -242,9 +242,9 @@ static void __argos_pm_qos_notify_power(struct argos_block *block,
 		level++;
 	}
 
-	pr_info("%s: name: %s : speed: %ld (%d->%d)\n", __func__, name, speed,
-			prev_level, level);
 	if (level != prev_level) {
+		pr_info("%s: name: %s : speed: %ld (%d->%d)\n", __func__, name, speed,
+			prev_level, level);
 		if (level == -1)
 			argos_freq_unlock(type);
 		else
