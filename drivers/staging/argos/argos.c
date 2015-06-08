@@ -258,7 +258,6 @@ static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedty
 	unsigned long speed;
 	struct argos_block *block;
 
-	pr_info("%s: arg: %ld\n", __func__, speedtype);
 	type = (speedtype & TYPE_MASK_BIT) - 1;
 	speed = speedtype >> TYPE_SHIFT;
 	block = &argos_pdata->blocks[type];
