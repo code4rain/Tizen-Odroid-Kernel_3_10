@@ -208,8 +208,8 @@ static void __argos_pm_qos_notify(struct argos_block *block, int type, long spee
 	int i;
 	int level;
 	int prev_level = block->prev_level;
+	char *name = block->name;
 
-	pr_info("%s: type: %d : speed: %ld\n", __func__, type, speed);
 	/* find proper level */
 	for (level = -1, i = 0; i < block->num_entry; i++) {
 		if (speed < block->table[i].throughput)
@@ -217,6 +217,8 @@ static void __argos_pm_qos_notify(struct argos_block *block, int type, long spee
 		level++;
 	}
 
+	pr_info("%s: name: %s : speed: %ld (%d->%d)\n", __func__, name, speed,
+			prev_level, level);
 	if (level != prev_level) {
 		if (level == -1)
 			argos_freq_unlock(type);
@@ -231,7 +233,7 @@ static void __argos_pm_qos_notify_power(struct argos_block *block,
 	int i;
 	int level;
 	int prev_level = block->power_prev_level;
-	pr_info("%s: type: %d : speed: %ld\n", __func__, type, speed);
+	char *name = block->name;
 
 	/* find proper level */
 	for (level = -1, i = 0; i < block->power_num_entry; i++) {
@@ -240,6 +242,8 @@ static void __argos_pm_qos_notify_power(struct argos_block *block,
 		level++;
 	}
 
+	pr_info("%s: name: %s : speed: %ld (%d->%d)\n", __func__, name, speed,
+			prev_level, level);
 	if (level != prev_level) {
 		if (level == -1)
 			argos_freq_unlock(type);
@@ -259,13 +263,6 @@ static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedty
 	speed = speedtype >> TYPE_SHIFT;
 	block = &argos_pdata->blocks[type];
 
-	pr_info("%s name:%s, speed:%ldMbps\n", __func__, block->name, speed);
-
-	if (power_mode != prev_power_mode) {
-		argos_freq_unlock(type);
-		prev_power_mode = power_mode;
-	}
-
 	if (type > argos_pdata->nblocks)
 		return NOTIFY_BAD;
 	if (power_mode)
@@ -274,6 +271,38 @@ static int argos_pm_qos_notify(struct notifier_block *nfb, unsigned long speedty
 		__argos_pm_qos_notify(block, type, speed);
 
 	return NOTIFY_OK;
+}
+
+static ssize_t
+power_mode_store(struct device *cd, struct device_attribute *attr,
+		  const char *buf, size_t count)
+{
+	int i;
+
+	for (i = 0; i < argos_pdata->nblocks; i++) {
+		argos_freq_unlock(i);
+		argos_pdata->blocks[i].prev_level = -1;
+		argos_pdata->blocks[i].power_prev_level = -1;
+	}
+	prev_power_mode = power_mode;
+	power_mode = !!simple_strtoul(buf, NULL, 10);
+	return count;
+}
+
+static ssize_t power_mode_show(struct device *cd,
+				struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", power_mode);
+}
+static DEVICE_ATTR(power_mode, S_IRUGO | S_IWUGO, power_mode_show, power_mode_store);
+static int argos_create_sysfs(struct platform_device *pdev)
+{
+	struct device *dev = &pdev->dev;
+	int err;
+
+	err = device_create_file(dev, &dev_attr_power_mode);
+
+	return err;
 }
 
 static int argos_probe(struct platform_device *pdev)
@@ -308,6 +337,7 @@ static int argos_probe(struct platform_device *pdev)
 
 	argos_pdata = pdata;
 	platform_set_drvdata(pdev, pdata);
+	argos_create_sysfs(pdev);
 
 	pr_info("%s: probe-\n", __func__);
 	return 0;
@@ -347,8 +377,6 @@ static void __exit argos_exit(void)
 {
 	return platform_driver_unregister(&argos_driver);
 }
-
-module_param_named(power_mode, power_mode, uint, S_IRUGO | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
 subsys_initcall(argos_init);
 module_exit(argos_exit);
