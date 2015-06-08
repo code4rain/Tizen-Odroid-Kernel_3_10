@@ -64,14 +64,16 @@
 		boot_device@2 {
 			net_boost,label="WIFI";
 			net_boost,node="wlan0";
-			net_boost,table_size = <3>;
-			net_boost,table= <60 800000 0
-					  100 1000000 0
-					  180 1100000 543000>;
+			net_boost,table_size = <5>;
+			net_boost,table= <100 400000 0
+					  300 500000 0
+					  500 600000 333000
+					  700 800000 333000
+					  900 900000 333000>;
 			net_boost,power_table_size = <3>;
-			net_boost,power_table= <60 800000 0
-					  100 1000000 0
-					  180 1100000 543000>;
+			net_boost,power_table= <300 300000 0
+					  	500 4000000 0
+					  	700 500000 0>;
 		};
 	};
 };
