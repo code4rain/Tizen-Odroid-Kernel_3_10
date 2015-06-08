@@ -348,7 +348,7 @@ static void __exit argos_exit(void)
 	return platform_driver_unregister(&argos_driver);
 }
 
-module_param_named(power_mode, power_mode, uint, S_IRUGO | S_IWUSR);
+module_param_named(power_mode, power_mode, uint, S_IRUGO | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 
 subsys_initcall(argos_init);
 module_exit(argos_exit);
